@@ -31,3 +31,14 @@ _VIDEOS_WITH_FPS_PROBLEMS = [
 ]
 
 DEFAULT_DEVICE = os.getenv("DEFAULT_DEVICE", "cuda")
+
+
+def resolved_inference_device() -> str:
+    """Device string for ``model.to(...)`` / eval. Honors ``DEFAULT_DEVICE`` (e.g. ``cuda:1`` for the 2nd GPU). Falls back to ``cpu`` when CUDA is requested but unavailable (e.g. driver / PyTorch mismatch)."""
+
+    import torch
+
+    d = (os.getenv("DEFAULT_DEVICE", "cuda") or "cuda").strip()
+    if d.startswith("cuda") and not torch.cuda.is_available():
+        return "cpu"
+    return d
