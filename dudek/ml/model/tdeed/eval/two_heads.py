@@ -3,7 +3,7 @@ import enum
 import json
 import os
 import shutil
-import time
+import tempfile
 
 from contextlib import nullcontext
 from typing import List, Type, Optional
@@ -215,8 +215,7 @@ class BASTeamTDeedEvaluator(TDeedMAPEvaluator):
         json_filename: str = "results_spotting.json",
     ):
 
-        tmp_root_dir = f"/tmp/.sn-{time.time()}"
-        os.makedirs(tmp_root_dir, exist_ok=True)
+        tmp_root_dir = tempfile.mkdtemp(prefix=".sn-")
         self.annotate(scored_videos)
         for scored_video in scored_videos:
 
@@ -251,16 +250,19 @@ class BASTeamTDeedEvaluator(TDeedMAPEvaluator):
 
         return scored_videos
 
-    def predict(self, clips: List[TdeedVideoClip], use_amp=True, device: str = "cuda"):
+    def predict(self, clips: List[TdeedVideoClip], use_amp=True, device: Optional[str] = None):
 
         clips_tensor = torch.stack([c.clip_tensor for c in clips])
 
-        if clips_tensor.device != device:
+        if device is None:
+            device = str(next(self.model.parameters()).device)
+        if clips_tensor.device.type != device.split(":")[0]:
             clips_tensor = clips_tensor.to(device)
         clips_tensor = clips_tensor.float()
         self.model.eval()
+        use_amp_cuda = use_amp and device.startswith("cuda")
         with torch.no_grad():
-            with torch.amp.autocast("cuda") if use_amp else nullcontext():
+            with torch.amp.autocast("cuda") if use_amp_cuda else nullcontext():
                 predictions, _ = self.model(clips_tensor, inference=True)
                 return [
                     TeamTDeed2HeadsPrediction(
